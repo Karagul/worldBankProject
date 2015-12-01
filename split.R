@@ -16,8 +16,8 @@ beta_81 = 1
 beta_91 = 1
 #coefficients for pscore and untreatment
 beta_0 = 1
-beta_1 = 1
-beta_2 = 10
+beta_1 = 100
+beta_2 = 100
 beta_3 = 1
 beta_4 = 1
 beta_5 = 1
@@ -186,40 +186,7 @@ ctsplit <- function(y, wt, x, parms, continuous) {
     direction <- goodness
     # continuous x variable
     
-    sumTrt = 0
-    sumUntrt = 0
-    sumTrtWt = 0
-    sumUntrtWt = 0
-    #print(nrow(y))
-    for(i in 1:nrow(y)){
-      if(y[i,2] == 1){
-        sumTrt = sumTrt + y[i,1]/y[i,3]
-        sumTrtWt = sumTrtWt + 1/y[i,3]
-      }
-      else{
-        sumUntrt = sumUntrt + y[i,1]/(1-y[i,3])
-        sumUntrtWt = sumUntrtWt + 1/(1-y[i,3])
-      }
-    }
-    #wmean =  sumTrt/sumTrtWt - sumUntrt/sumUntrtWt
-    prss = 0
-    if(sumTrtWt != 0 & sumUntrtWt !=0 ){
-      wmean =  sumTrt/sumTrtWt - sumUntrt/sumUntrtWt
-    }
-    if(sumTrtWt == 0 & sumUntrtWt !=0 ){
-      wmean = - sumUntrt/sumUntrtWt
-    }
-    if(sumTrtWt != 0 & sumUntrtWt ==0 ){
-      wmean = sumTrt/sumTrtWt
-    }
-    if(sumTrtWt == 0 & sumUntrtWt ==0 ){
-      print("error!")
-    }
     
-    for(i in 1:nrow(y)){
-      prss = prss + (y[i,4] - wmean)^2
-      #rss = rss +  wmean^2
-    }
     
     for(j in 1:(n-1)){
       rss = 0
@@ -287,7 +254,7 @@ ctsplit <- function(y, wt, x, parms, continuous) {
         rss = rss + (y[i,4] + wmean.right)^2
         #rss = rss + ( wmean.right)^2
       }
-      goodness[j] = prss - rss 
+      goodness[j] =  1 / rss 
       direction[j] = sign(wmean.left)
       
 
@@ -300,40 +267,7 @@ ctsplit <- function(y, wt, x, parms, continuous) {
     # Categorical X variable
   
     
-    sumTrt = 0
-    sumUntrt = 0
-    sumTrtWt = 0
-    sumUntrtWt = 0
-    #print(nrow(y))
-    for(i in 1:nrow(y)){
-      if(y[i,2] == 1){
-        sumTrt = sumTrt + y[i,1]/y[i,3]
-        sumTrtWt = sumTrtWt + 1/y[i,3]
-      }
-      else{
-        sumUntrt = sumUntrt + y[i,1]/(1-y[i,3])
-        sumUntrtWt = sumUntrtWt + 1/(1-y[i,3])
-      }
-    }
-    #wmean =  sumTrt/sumTrtWt - sumUntrt/sumUntrtWt
-    prss = 0
-    if(sumTrtWt != 0 & sumUntrtWt !=0 ){
-      wmean =  sumTrt/sumTrtWt - sumUntrt/sumUntrtWt
-    }
-    if(sumTrtWt == 0 & sumUntrtWt !=0 ){
-      wmean = - sumUntrt/sumUntrtWt
-    }
-    if(sumTrtWt != 0 & sumUntrtWt ==0 ){
-      wmean = sumTrt/sumTrtWt
-    }
-    if(sumTrtWt == 0 & sumUntrtWt ==0 ){
-      print("error!")
-    }
     
-    for(i in 1:nrow(y)){
-      prss = prss + (y[i,4] - wmean)^2
-      #rss = rss +  wmean^2
-    }
     
     ux <- sort(unique(x))
     n = length(ux)
@@ -448,14 +382,14 @@ alist <- list(eval=ctev, split=ctsplit, init=ctinit)
 # y : outcome, treatment(W), "pscore", tansformaed outcome
 
 fit1 <- rpart(cbind(outcome,Treatment,pscore,trans_outcome) ~ . -pscore -outcome-Treatment-Trt,
-              db, control=rpart.control(minsplit=20, xval=0),
+              db, control=rpart.control(minsplit=10, xval=0),
               method=alist)
 
 
 prp(fit1)
 print(fit1)
 fit2 <- rpart(trans_outcome ~ . -pscore -outcome-Treatment-Trt,
-              db, control=rpart.control(minsplit=20, xval=0),
+              db, control=rpart.control(minsplit=10, xval=0),
               method='anova')
 prp(fit2)
 print(fit2)
