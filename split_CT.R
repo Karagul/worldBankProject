@@ -146,7 +146,7 @@ ctev <- function(y, wt,parms) {
   }
   
   for(i in 1:nrow(y)){
-    rss = rss + (y[i,4] - wmean)^2
+    rss = rss + (wmean)^2
     #rss = rss +  wmean^2
   }
   
@@ -223,7 +223,7 @@ ctsplit <- function(y, wt, x, parms, continuous) {
       }
 
       for(i in 1:j){
-        rss = rss + (y[i,4] - wmean.left)^2
+        rss = rss + (wmean.left)^2
         #rss = rss + ( wmean.left)^2
       }
       # right child
@@ -251,7 +251,7 @@ ctsplit <- function(y, wt, x, parms, continuous) {
       }
       
       for(i in (j+1):n){
-        rss = rss + (y[i,4] + wmean.right)^2
+        rss = rss + ( wmean.right)^2
         #rss = rss + ( wmean.right)^2
       }
       goodness[j] =  1 / rss 
@@ -350,10 +350,10 @@ ctsplit <- function(y, wt, x, parms, continuous) {
       
       for(i in 1:nrow(y)){
         if(grep(x[i],ux) <= j){
-          rss = rss + (y[i,4]-wmean.left)^2
+          rss = rss + (wmean.left)^2
         }
         else{
-          rss = rss + (y[i,4]-wmean.right)^2
+          rss = rss + (wmean.right)^2
         }
       }
       goodness[j] = prss - rss 
