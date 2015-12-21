@@ -5,19 +5,19 @@ library("MatchIt")
 variables = 4
 
 #coefficients for treatment 
-beta_11 = 100
-beta_21 = 100
-beta_31 = 1
-beta_41 = 1
-beta_51 = 1
-beta_61 = 1
-beta_71 = 1
-beta_81 = 1
-beta_91 = 1
+beta_11 = 10
+beta_21 = 0
+beta_31 = 0
+beta_41 = 0
+beta_51 = 0
+beta_61 = 0
+beta_71 = 0
+beta_81 = 0
+beta_91 = 0
 #coefficients for pscore and untreatment
-beta_0 = 1
-beta_1 = 100
-beta_2 = 100
+beta_0 = 0
+beta_1 = 1
+beta_2 = 1
 beta_3 = 1
 beta_4 = 1
 beta_5 = 1
@@ -32,7 +32,7 @@ beta_outcome_trm = 100
 # delete rows with NA
 row.has.na <- apply(wb_pc1_data_all, 1, function(x){any(is.na(x))})
 wb = wb_pc1_data_all[!row.has.na,]
-wb = wb[1:100,]
+wb = wb[1:1000,]
 # 9 variables example
 if(variables == 9){
   beta = c(beta_1,beta_2,beta_3,beta_4,beta_5,beta_6,beta_7,beta_8,beta_9)
@@ -61,14 +61,16 @@ if(variables == 2){
 # scale eahc column to range [0,1]
 for(i in 1:ncol(db)){
   maxv = max(db[,i])
-  db[,i] = 0.9*db[,i] / maxv
+  minv = min(db[,i])
+  db[,i] = (db[,i] -minv)/ (maxv-minv)
 }
 
 # pscore caculation 
 db$pscore = data.matrix(db) %*% beta + beta_0
 db$Trt = data.matrix(db[,1:(ncol(db)-1)]) %*% betaTrt
 maxv = max(db$pscore)
-db$pscore =  db$pscore / maxv
+minv = min(db$pscore)
+db$pscore =  (db$pscore-minv) / (maxv - minv)
 
 # set pecentile for treatment and undtreament
 thresh = quantile(db$pscore,0.5)
@@ -95,14 +97,26 @@ names(db)[ncol(db)] = "outcome"
 db = cbind(db,Trt)
 names(db)[ncol(db)] = "Treatment"
 
+
+
+# m.out1 <- matchit(Treatment~ lnye_2000e+sslp_e+pc41_2000m + at41_2000e , data = db, method = "nearest", distance = "logit")
+# m.data1 <- match.data(m.out1,distance ="pscore") # create ps matched data set from previous output
+# print("pscore")
+# print(dim(db))
+# db = cbind(db,m.data1$pscore)
+# names(db)[ncol(db)] = "pscore"
+
+
 # calculate transformed outcome 
 trans_outcome = list(rep(0,nrow(db)))
 for(i in 1:nrow(db)){
   if(db$Treatment[i] == 1){
     trans_outcome[i] = db$outcome[i] / db$pscore[i]
+    # trans_outcome[i] = db$outcome[i] - db$pscore[i]
   }
   else{
     trans_outcome[i] = -db$outcome[i] /(1- db$pscore[i])
+    #trans_outcome[i] = db$outcome[i] - db$pscore[i]
   }
 }
 df <- data.frame(matrix(unlist(trans_outcome), byrow=T))
@@ -110,15 +124,19 @@ db = cbind(db,df)
 names(db)[ncol(db)] = "trans_outcome"
 
 
+db = db[which(db$pscore !=0 & db$pscore!=1),]
 # user defined split function
-
 # y : outcome, treatment(W), "pscore", tansformed outcome
 
 ctev <- function(y, wt,parms) {
+  #print(y)
+  #print("node evaluate")
   sumTrt = 0
   sumUntrt = 0
   sumTrtWt = 0
   sumUntrtWt = 0
+  wmean = 0
+  rss = 0
   #print(nrow(y))
   for(i in 1:nrow(y)){
     if(y[i,2] == 1){
@@ -131,25 +149,34 @@ ctev <- function(y, wt,parms) {
     }
   }
   #wmean =  sumTrt/sumTrtWt - sumUntrt/sumUntrtWt
-  rss = 0
   if(sumTrtWt != 0 & sumUntrtWt !=0 ){
+    #print("both")
     wmean =  sumTrt/sumTrtWt - sumUntrt/sumUntrtWt
   }
-  if(sumTrtWt == 0 & sumUntrtWt !=0 ){
-    wmean = - sumUntrt/sumUntrtWt
-  }
-  if(sumTrtWt != 0 & sumUntrtWt ==0 ){
-    wmean = sumTrt/sumTrtWt
-  }
-  if(sumTrtWt == 0 & sumUntrtWt ==0 ){
-    print("error!")
-  }
-  
+  # if(sumTrtWt == 0 & sumUntrtWt !=0 ){
+  #   print("only untreated")
+  #   #wmean = - sumUntrt/sumUntrtWt
+  # }
+  # if(sumTrtWt != 0 & sumUntrtWt ==0 ){
+  #   print("only treated")
+  #   #wmean = sumTrt/sumTrtWt
+  # }
+  # if(sumTrtWt == 0 & sumUntrtWt ==0 ){
+  #   print("error!")
+  # }
+  # print('y number')
+  # print(nrow(y))
+  # print("mean")
+  # print(wmean)
+  # print("treat")
+  # print(sumTrtWt)
+  # print("untreat")
+  # print(sumUntrtWt)
   for(i in 1:nrow(y)){
     rss = rss + (y[i,4] - wmean)^2
     #rss = rss +  wmean^2
   }
-  
+  #print(y[,4])
   list(label= wmean, deviance=rss)
 }
 
@@ -181,13 +208,11 @@ ctev <- function(y, wt,parms) {
 
 ctsplit <- function(y, wt, x, parms, continuous) {
   if (continuous) {
+    #print(y)
     n = nrow(y)
     goodness <- double(n-1)
     direction <- goodness
     # continuous x variable
-    
-    
-    
     for(j in 1:(n-1)){
       rss = 0
       sumTrt.left = 0
@@ -198,6 +223,8 @@ ctsplit <- function(y, wt, x, parms, continuous) {
       sumUntrt.right = 0
       sumTrtWt.right = 0
       sumUntrtWt.right = 0
+      wmean.left = 0
+      wmean.right = 0
       # left child
       for(i in 1:j){
         if(y[i,2] == 1){
@@ -211,21 +238,26 @@ ctsplit <- function(y, wt, x, parms, continuous) {
       }
       if(sumTrtWt.left != 0 & sumUntrtWt.left !=0 ){
         wmean.left =  sumTrt.left/sumTrtWt.left - sumUntrt.left/sumUntrtWt.left
+        #print(wmean.left)
+        for(i in 1:j){
+          rss = rss + (y[i,4] - wmean.left)^2
+          #rss = rss + ( wmean.left)^2
+        }
       }
-      if(sumTrtWt.left == 0 & sumUntrtWt.left !=0 ){
-        wmean.left = - sumUntrt.left/sumUntrtWt.left
+      else{
+        goodness[j] = 0
+        next
       }
-      if(sumTrtWt.left != 0 & sumUntrtWt.left ==0 ){
-        wmean.left = sumTrt.left/sumTrtWt.left
-      }
-      if(sumTrtWt.left == 0 & sumUntrtWt.left ==0 ){
-        print("error!")
-      }
-
-      for(i in 1:j){
-        rss = rss + (y[i,4] - wmean.left)^2
-        #rss = rss + ( wmean.left)^2
-      }
+      # if(sumTrtWt.left == 0 & sumUntrtWt.left !=0 ){
+      #   wmean.left = - sumUntrt.left/sumUntrtWt.left
+      # }
+      # if(sumTrtWt.left != 0 & sumUntrtWt.left ==0 ){
+      #   wmean.left = sumTrt.left/sumTrtWt.left
+      # }
+      # if(sumTrtWt.left == 0 & sumUntrtWt.left ==0 ){
+      #   #print("error!")
+      # }
+      
       # right child
       for(i in (j+1):n){
         if(y[i,2] == 1){
@@ -239,127 +271,135 @@ ctsplit <- function(y, wt, x, parms, continuous) {
       }
       if(sumTrtWt.right != 0 & sumUntrtWt.right !=0 ){
         wmean.right =  -sumTrt.right/sumTrtWt.right + sumUntrt.right/sumUntrtWt.right
+        for(i in (j+1):n){
+          rss = rss + (y[i,4] + wmean.right)^2
+          #rss = rss + ( wmean.right)^2
+        }
+        #print(rss)
+        goodness[j] =  1/rss 
+        direction[j] = sign(wmean.left)
       }
-      if(sumTrtWt.right == 0 & sumUntrtWt.right !=0 ){
-        wmean.right =  -sumUntrt.right/sumUntrtWt.right
-      }
-      if(sumTrtWt.right != 0 & sumUntrtWt.right ==0 ){
-        wmean.right = sumTrt.right/sumTrtWt.right
-      }
-      if(sumTrtWt.right == 0 & sumUntrtWt.right ==0 ){
-        print("error!")
-      }
+      else{
+        goodness[j] = 0
       
-      for(i in (j+1):n){
-        rss = rss + (y[i,4] + wmean.right)^2
-        #rss = rss + ( wmean.right)^2
       }
-      goodness[j] =  1 / rss 
-      direction[j] = sign(wmean.left)
+      # if(sumTrtWt.right == 0 & sumUntrtWt.right !=0 ){
+      #   wmean.right =  sumUntrt.right/sumUntrtWt.right
+      # }
+      # if(sumTrtWt.right != 0 & sumUntrtWt.right ==0 ){
+      #   wmean.right = -sumTrt.right/sumTrtWt.right
+      # }
+      # if(sumTrtWt.right == 0 & sumUntrtWt.right ==0 ){
+      #   #print("error!")
+      # }
+      
+      
       
 
     }
-    
+    #print(x)
+    #print(goodness)
+    #print(direction)
     list(goodness=goodness, direction=direction)
     
   }
-  else {
-    # Categorical X variable
-  
-    
-    
-    
-    ux <- sort(unique(x))
-    n = length(ux)
-    goodness <- double(n-1)
-    direction <- goodness
-    mean = double(n)
-    count = double(n)
-    sum = double(n)
-    for(i in 1:nrow(y)){
-      for(j in 1:n){
-        if(x[i] == ux[j]){
-          count[j] = count[j] + 1
-          sum[j] = sum[j] + y[i,1]
-        }
-      }
-    }
-    mean = sum / count
-    #rank X
-    idx = order(mean)
-    ux = ux[idx]
-    for(j in 1:(n-1)){
-      rss = 0
-      sumTrt.left = 0
-      sumUntrt.left = 0
-      sumTrtWt.left = 0
-      sumUntrtWt.left = 0
-      sumTrt.right = 0
-      sumUntrt.right = 0
-      sumTrtWt.right = 0
-      sumUntrtWt.right = 0
-      for(i in 1:nrow(y)){
-        if(grep(x[i],ux) <= j){
-          if(y[i,2] >= 1){
-            sumTrt.left = sumTrt.left + y[i,1]/y[i,3]
-            sumTrtWt.left = sumTrtWt.left + 1/y[i,3]
-          }
-          else{
-            sumUntrt.left = sumUntrt.left + y[i,1]/(1-y[i,3])
-            sumUntrtWt.left = sumUntrtWt.left + 1/(1-y[i,3])
-          }
-          
-        }
-        else{
-          if(y[i,2] >= 1){
-            sumTrt.right = sumTrt.right + y[i,1]/y[i,3]
-            sumTrtWt.right = sumTrtWt.right + 1/y[i,3]
-          }
-          else{
-            sumUntrt.right = sumUntrt.right + y[i,1]/(1-y[i,3])
-            sumUntrtWt.right = sumUntrtWt.right + 1/(1-y[i,3])
-          }
-        }
-      }
-      
-      if(sumTrtWt.left != 0 & sumUntrtWt.left !=0 ){
-        wmean.left =  sumTrt.left/sumTrtWt.left - sumUntrt.left/sumUntrtWt.left
-      }
-      if(sumTrtWt.left == 0 & sumUntrtWt.left !=0 ){
-        wmean.left = - sumUntrt.left/sumUntrtWt.left
-      }
-      if(sumTrtWt.left != 0 & sumUntrtWt.left ==0 ){
-        wmean.left = sumTrt.left/sumTrtWt.left
-      }
-      if(sumTrtWt.left == 0 & sumUntrtWt.left ==0 ){
-        print("error!")
-      }
-      
-      if(sumTrtWt.right != 0 & sumUntrtWt.right !=0 ){
-        wmean.right =  -sumTrt.right/sumTrtWt.right + sumUntrt.right/sumUntrtWt.right
-      }
-      if(sumTrtWt.right == 0 & sumUntrtWt.right !=0 ){
-        wmean.right =  sumUntrt.right/sumUntrtWt.right
-      }
-      if(sumTrtWt.right != 0 & sumUntrtWt.right ==0 ){
-        wmean.right = -sumTrt.right/sumTrtWt.right
-      }
-      if(sumTrtWt.right == 0 & sumUntrtWt.right ==0 ){
-        print("error!")
-      }
-      
-      for(i in 1:nrow(y)){
-        if(grep(x[i],ux) <= j){
-          rss = rss + (y[i,4]-wmean.left)^2
-        }
-        else{
-          rss = rss + (y[i,4]-wmean.right)^2
-        }
-      }
-      goodness[j] = prss - rss 
-    }
-    list(goodness=goodness, direction=ux)
-  }
+  # else {
+  #   # Categorical X variable
+  # 
+  #   
+  #   
+  #   
+  #   ux <- sort(unique(x))
+  #   n = length(ux)
+  #   goodness <- double(n-1)
+  #   direction <- goodness
+  #   mean = double(n)
+  #   count = double(n)
+  #   sum = double(n)
+  #   for(i in 1:nrow(y)){
+  #     for(j in 1:n){
+  #       if(x[i] == ux[j]){
+  #         count[j] = count[j] + 1
+  #         sum[j] = sum[j] + y[i,1]
+  #       }
+  #     }
+  #   }
+  #   mean = sum / count
+  #   #rank X
+  #   idx = order(mean)
+  #   ux = ux[idx]
+  #   for(j in 1:(n-1)){
+  #     rss = 0
+  #     sumTrt.left = 0
+  #     sumUntrt.left = 0
+  #     sumTrtWt.left = 0
+  #     sumUntrtWt.left = 0
+  #     sumTrt.right = 0
+  #     sumUntrt.right = 0
+  #     sumTrtWt.right = 0
+  #     sumUntrtWt.right = 0
+  #     for(i in 1:nrow(y)){
+  #       if(grep(x[i],ux) <= j){
+  #         if(y[i,2] >= 1){
+  #           sumTrt.left = sumTrt.left + y[i,1]/y[i,3]
+  #           sumTrtWt.left = sumTrtWt.left + 1/y[i,3]
+  #         }
+  #         else{
+  #           sumUntrt.left = sumUntrt.left + y[i,1]/(1-y[i,3])
+  #           sumUntrtWt.left = sumUntrtWt.left + 1/(1-y[i,3])
+  #         }
+  #         
+  #       }
+  #       else{
+  #         if(y[i,2] >= 1){
+  #           sumTrt.right = sumTrt.right + y[i,1]/y[i,3]
+  #           sumTrtWt.right = sumTrtWt.right + 1/y[i,3]
+  #         }
+  #         else{
+  #           sumUntrt.right = sumUntrt.right + y[i,1]/(1-y[i,3])
+  #           sumUntrtWt.right = sumUntrtWt.right + 1/(1-y[i,3])
+  #         }
+  #       }
+  #     }
+  #     
+  #     if(sumTrtWt.left != 0 & sumUntrtWt.left !=0 ){
+  #       wmean.left =  sumTrt.left/sumTrtWt.left - sumUntrt.left/sumUntrtWt.left
+  #     }
+  #     if(sumTrtWt.left == 0 & sumUntrtWt.left !=0 ){
+  #       wmean.left = - sumUntrt.left/sumUntrtWt.left
+  #     }
+  #     if(sumTrtWt.left != 0 & sumUntrtWt.left ==0 ){
+  #       wmean.left = sumTrt.left/sumTrtWt.left
+  #     }
+  #     if(sumTrtWt.left == 0 & sumUntrtWt.left ==0 ){
+  #       #print("error!")
+  #     }
+  #     
+  #     if(sumTrtWt.right != 0 & sumUntrtWt.right !=0 ){
+  #       wmean.right =  -sumTrt.right/sumTrtWt.right + sumUntrt.right/sumUntrtWt.right
+  #     }
+  #     if(sumTrtWt.right == 0 & sumUntrtWt.right !=0 ){
+  #       wmean.right =  sumUntrt.right/sumUntrtWt.right
+  #     }
+  #     if(sumTrtWt.right != 0 & sumUntrtWt.right ==0 ){
+  #       wmean.right = -sumTrt.right/sumTrtWt.right
+  #     }
+  #     if(sumTrtWt.right == 0 & sumUntrtWt.right ==0 ){
+  #       #print("error!")
+  #     }
+  #     
+  #     for(i in 1:nrow(y)){
+  #       if(grep(x[i],ux) <= j){
+  #         rss = rss + (y[i,4]-wmean.left)^2
+  #       }
+  #       else{
+  #         rss = rss + (y[i,4]-wmean.right)^2
+  #       }
+  #     }
+    #   goodness[j] = prss - rss 
+    # }
+  #   list(goodness=goodness, direction=ux)
+  # }
 }
 
 # The init function:
@@ -382,14 +422,15 @@ alist <- list(eval=ctev, split=ctsplit, init=ctinit)
 # y : outcome, treatment(W), "pscore", tansformaed outcome
 
 fit1 <- rpart(cbind(outcome,Treatment,pscore,trans_outcome) ~ . -pscore -outcome-Treatment-Trt,
-              db, control=rpart.control(minsplit=20, xval=0),
+              db,
+              control=rpart.control(minsplit=2,cp = 0.004),
               method=alist)
 
 
 prp(fit1)
 print(fit1)
-fit2 <- rpart(trans_outcome ~ . -pscore -outcome-Treatment-Trt,
-              db, control=rpart.control(minsplit=20, xval=0),
-              method='anova')
-prp(fit2)
-print(fit2)
+# fit2 <- rpart(trans_outcome ~ . -pscore-pscore -outcome-Treatment-Trt,
+#               db, control=rpart.control(minsplit=50, xval=0,cp = 0.004),
+#               method='anova')
+# prp(fit2)
+# print(fit2)
