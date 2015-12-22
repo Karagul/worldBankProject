@@ -5,10 +5,10 @@ library("MatchIt")
 variables = 4
 
 #coefficients for treatment 
-beta_11 = 10
-beta_21 = 0
-beta_31 = 0
-beta_41 = 0
+beta_11 = 0
+beta_21 = 10
+beta_31 = 10
+beta_41 = 10
 beta_51 = 0
 beta_61 = 0
 beta_71 = 0
