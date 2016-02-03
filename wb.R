@@ -1,74 +1,17 @@
 library("rpart")
 library("rpart.plot")
-library("MatchIt")
 library(Rcpp)
+Sys.setenv("PKG_CXXFLAGS"="-fopenmp")
+Sys.setenv("PKG_LIBS"="-fopenmp")
 sourceCpp("~/splitc.cpp")
-#load world bank data set
-wb_pc1_data_all <- read.csv("~/Downloads/wb_pc1_data_all.csv")
-
-# delete rows with NA
-row.has.na <- apply(wb_pc1_data_all, 1, function(x){any(is.na(x))})
-wb = wb_pc1_data_all[!row.has.na,]
-db = wb
-# scale eahc column to range [0,1]
-for(i in 1:ncol(db)){
-  maxv = max(db[,i])
-  minv = min(db[,i])
-  db[,i] = (db[,i] -minv)/ (maxv-minv)
-}
-
-# pscore caculation 
-
-
-psmModel <-  "TrtBin ~ gpw3_2000e + at41_1999e + pc41_1999e + alp4_1999e + lnye_1999e + 
-am50_e + sslp_e + selv_e + dari_e + droa_e +
-pre_avg_NDVI_max + pre_avg_temp_mean + pre_avg_precip_mean + post_avg_NDVI_max + post_avg_temp_mean + post_avg_precip_mean + 
-pre_trend_temp_mean + pre_trend_precip_mean + post_trend_temp_mean + post_trend_precip_mean +
-sector_group"
-PSMfit <- glm(mdl, db, family="binomial", na.action=na.omit)
-
-
-# set pecentile for treatment and undtreament
-#thresh = quantile(db$pscore,0.5)
-
-# calculate outcome, set treatment
-# outcome = list(rep(0,nrow(db)))
-# Treatment = list(rep(0,nrow(db)))
-# 
-# for(i in 1:nrow(db)){
-#   if(db$pscore[i] > thresh){
-#     outcome[i] = db$Trt[i] + db$pscore[i] + beta_outcome_trm
-#     Treatment[i] = 1
-#   }
-#   else{
-#     outcome[i] = db$pscore[i]
-#     Treatment[i] = 0
-#   }
-# }
-
-df <- data.frame(matrix(unlist(outcome), byrow = T))
-Trt = data.frame(matrix(unlist(Treatment),byrow = T))
-db = cbind(db,df)
-names(db)[ncol(db)] = "outcome" 
-db = cbind(db,Trt)
-names(db)[ncol(db)] = "Treatment"
-
-# calculate transformed outcome 
-trans_outcome = list(rep(0,nrow(db)))
-for(i in 1:nrow(db)){
-  if(db$Treatment[i] == 1){
-    trans_outcome[i] = db$outcome[i] / db$pscore[i]
-  }
-  else{
-    trans_outcome[i] = -db$outcome[i] /(1- db$pscore[i])
-  }
-}
-df <- data.frame(matrix(unlist(trans_outcome), byrow=T))
-db = cbind(db,df)
-names(db)[ncol(db)] = "trans_outcome"
-
-db = db[which(db$pscore !=0 & db$pscore!=1),]
-
+nums <- sapply(db, is.numeric)
+#test = db[,!nums]
+test = db[,nums]
+test[,"outcome"] = db$outcome
+test[,"pscore"] = db$pscore
+test[,"trans_outcome"] = db$trans_outcome
+test[,"TrtBin"] =db$TrtBin
+#test = test[1:10,]
 ### user defined split function
 
 ctev <- function(y, wt,parms) {
@@ -83,10 +26,9 @@ ctsplit <- function(y, wt, x, parms, continuous) {
     list(goodness=res[1:(n-1)], direction=res[n:(2*(n-1))])
   }
   else{
-    ux <- sort(unique(x))
-    n = length(ux)
-    res = splitnc(y,x,ux)
-    list(goodness=res[1:(n-1)], direction=res[n:(2*(n-1))])
+    res = splitnc(y,x)
+    n=(length(res)+1)/2
+    list(goodness=res[1:(n-1)], direction=res[n:(2*n-1)])
   }
 }
 
@@ -107,10 +49,17 @@ ctinit <- function(y, offset, parms, wt) {
 alist <- list(eval=ctev, split=ctsplit, init=ctinit)
 # y : outcome, treatment(W), "pscore", tansformaed outcome
 
-fit1 <- rpart(cbind(outcome,TrtBin,pscore,trans_outcome) ~ . -pscore -outcome-Treatment-Trt,
-              db,
-              control=rpart.control(minsplit=2,cp = 0.004),
+# fit1 <- rpart(cbind(outcome,TrtBin,pscore,trans_outcome) ~ . ,
+#               test,
+#               control=rpart.control(minsplit=2,cp = 0.004),
+#               method=alist)
+fit1 <- rpart(cbind(outcome,TrtBin,pscore,trans_outcome) ~ . ,
+              crxvdata,
+              #=rpart.control(minsplit=20,cp = 0.001,xval = 10),
               method=alist)
+
+
+#pfit<- prune(fit1, cp=fit1$cptable[which.min(fit$cptable[,"xerror"]),"CP"])
 
 
 prp(fit1)
