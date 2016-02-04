@@ -5,7 +5,7 @@ library("MatchIt")
 variables = 4
 
 #coefficients for treatment 
-beta_11 = 100
+beta_11 = 1
 beta_21 = 100
 beta_31 = 1
 beta_41 = 1
@@ -16,7 +16,7 @@ beta_81 = 1
 beta_91 = 1
 #coefficients for pscore and untreatment
 beta_0 = 1
-beta_1 = 100
+beta_1 = 1
 beta_2 = 100
 beta_3 = 1
 beta_4 = 1

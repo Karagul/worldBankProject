@@ -14,8 +14,9 @@
 
 using namespace Rcpp;
 
+
 // [[Rcpp::export]]
-NumericVector cv(NumericMatrix fit, double alpha, NumericVector index){
+NumericVector cv(NumericMatrix fit, NumericVector index){
   int n = index.size();
   std::vector<int> nodes;
   std::vector<int> nodesid;
@@ -112,6 +113,41 @@ NumericVector cv(NumericMatrix fit, double alpha, NumericVector index){
     out[i] = res[i];
   }
   return out;
+
+}
+
+
+// [[Rcpp::export]]
+NumericVector cross_validate(NumericMatrix fit, NumericVector index, NumericVector alphalist){
+  NumericVector alphalistm = clone(alphalist);
+  NumericVector res;
+  res = cv(fit, index);
+  double alpha;
+  alpha = res[0];
+  int nodeid;
+  nodeid = res[1];
+  std::vector<int> rowid;
+  if(nodeid < 0){
+    return alphalistm;
+  }
+  alphalistm.push_back(alpha);
+  fit(nodeid,0) = 1;
+  for(int i=1; i<res.size(); i++){
+    rowid.push_back(res[i]);
+  }
+  
+  NumericMatrix fitm(rowid.size(),8);
+  std::sort(rowid.begin(),rowid.end());
+  for(int i=0; i<rowid.size(); i++){
+    fitm(i,_) = fit(rowid[i],_);
+  }
+  
+  NumericVector indexm(rowid.size());
+  for(int i=0; i<rowid.size(); i++){
+    indexm[i] = index[rowid[i]];
+  }
+  
+  return cross_validate(fitm,indexm,alphalistm);
 
 }
 

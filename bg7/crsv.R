@@ -56,43 +56,47 @@ alist <- list(eval=ctev, split=ctsplit, init=ctinit)
 
 
 
-cross_validate <- function (fit, alpha, index, alphalist){
-  res = cv(fit, alpha, index)
-  alpha = res[1]
-  nodeid = round(res[2])
-  if(nodeid < 0){
-    return (alphalist) 
-  }
-  else{
-    alphalist = c(alphalist, alpha)
-    #print("alphalist")
-    #print(alphalist)
-    rowid = round(res[2:length(res)])
-    fit[nodeid+1,1] = 1
-    rowid = sort(rowid+1)
-    index = index[rowid]
-    fit = fit[rowid,]
-    cross_validate(fit, alpha,index,alphalist)
-  }
-}
+# cross_validate <- function (fit, alpha, index, alphalist){
+#   res = cv(fit, alpha, index)
+#   alpha = res[1]
+#   nodeid = round(res[2])
+#   if(nodeid < 0){
+#     return (alphalist) 
+#   }
+#   else{
+#     alphalist = c(alphalist, alpha)
+#     #print("alphalist")
+#     #print(alphalist)
+#     rowid = round(res[2:length(res)])
+#     fit[nodeid+1,1] = 1
+#     rowid = sort(rowid+1)
+#     index = index[rowid]
+#     fit = fit[rowid,]
+#     cross_validate(fit, alpha,index,alphalist)
+#   }
+# }
   db = test
   k = 10 
   n = dim(db)[1]
-  sample_size = floor(n/20)
+  sample_size = floor(n/1)
   ridx = sample(1:n,sample_size,replace=FALSE)
   crxvdata= db[ridx,]
   crxvdata$id <- sample(1:k, nrow(crxvdata), replace = TRUE)
   list = 1:k
   
-  fit1 = rpart (cbind(outcome,TrtBin,pscore,trans_outcome) ~ . -id,
-                crxvdata,
-                control = rpart.control(cp = 0,minsplit = 10),
-                method=alist)
-  fit = data.matrix(fit1$frame)
-  index = as.numeric(rownames(fit1$frame))
+  # fit1 = rpart (cbind(outcome,TrtBin,pscore,trans_outcome) ~ . -id,
+  #               crxvdata,
+  #               control = rpart.control(cp = 0,minsplit = 10),
+  #               method=alist)
+  # fit = data.matrix(fit1$frame)
+  # index = as.numeric(rownames(fit1$frame))
+  
+  load(file = "/home/scratch/jzhao/wbproject/wb/fit")
+  load(file = "/home/scratch/jzhao/wbproject/wb/index")
   alpha = 0
-  alphalist = 0
-  alphalist = cross_validate(fit, alpha, index,alphalist)
+  #alphalist = 0
+  #alphalist = cross_validate(fit, index,alphalist)
+  load(file = "/home/scratch/jzhao/wbproject/wb/alphalist")
   res = rep(0,length(alphalist)-1)
   for(j in 2:(length(alphalist)-1)){
     res[j] = sqrt(alphalist[j]*alphalist[j+1])
@@ -131,6 +135,8 @@ cross_validate <- function (fit, alpha, index, alphalist){
   
   
   alpha_res = alphacandidate[which.min(errset)]
+  save(errset,file = "/home/scratch/jzhao/wbproject/wb/errset" )
+  save(alpha_res,file = "/home/scratch/jzhao/wbproject/wb/alpha_res" )
   print("alpha value: ")
   print(alpha_res)  
  
